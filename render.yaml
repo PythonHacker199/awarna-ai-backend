@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: awarna-ai-backend
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: NVIDIA_NIM_API_KEY
+        sync: false
+      - key: NVIDIA_BASE_URL
+        value: https://integrate.api.nvidia.com/v1
+      - key: NVIDIA_TEXT_MODEL
+        value: deepseek-ai/deepseek-v4-pro-0813
+      - key: NVIDIA_VISION_MODEL
+        value: meta/muse-glimmer-30b
+      - key: REQUEST_TIMEOUT_SECONDS
+        value: "90"
+      - key: MAX_IMAGE_MB
+        value: "10"
+      - key: MAX_OCR_CHARS
+        value: "50000"
+      - key: CORS_ALLOW_ORIGINS
+        value: "*"
+    healthCheckPath: /api/health
