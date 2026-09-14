@@ -7,7 +7,7 @@ from google import genai
 from google.genai import types
 
 from ..config import settings
-from ..prompts import SYSTEM_PROMPT, build_text_prompt
+from .prompts import SYSTEM_PROMPT, build_text_prompt
 
 
 logger = logging.getLogger("awarna.gemini")
