@@ -119,14 +119,17 @@ async def analyze_text(
                     fallback_used,
                 )
 
+
         except Exception as exc:
 
             last_error = exc
 
-            logger.warning(
-                "%s provider failed: %s",
+            logger.exception(
+
+                "%s provider failed",
+
                 provider,
-                type(exc).__name__,
+
             )
 
             # Try next provider automatically.
