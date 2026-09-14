@@ -1,143 +1,79 @@
-from __future__ import annotations
-
 import logging
-from typing import Any
 
 from ..config import settings
 from . import gemini
-from . import nim
+
 
 logger = logging.getLogger("awarna.ai")
 
 
 class AIError(Exception):
-    """Raised when all configured AI providers fail."""
+    pass
 
 
 async def analyze_text(
     ocr_text: str,
-) -> tuple[dict[str, Any], str, str, bool]:
+):
 
-    if not ocr_text.strip():
+    if not ocr_text or not ocr_text.strip():
         raise AIError(
-            "OCR text is empty."
+            "OCR text cannot be empty."
         )
 
-    providers: list[str] = []
+    # ---------------------------------------------------------
+    # GEMINI
+    # ---------------------------------------------------------
 
-    # ==========================================
-    # PRIMARY: GEMINI
-    # ==========================================
-
-    if settings.PRIMARY_PROVIDER == "gemini":
-
-        if settings.gemini_configured:
-            providers.append("gemini")
-
-        if (
-            settings.ENABLE_FALLBACK
-            and settings.nvidia_configured
-        ):
-            providers.append("nvidia")
-
-    # ==========================================
-    # PRIMARY: NVIDIA
-    # ==========================================
-
-    else:
-
-        if settings.nvidia_configured:
-            providers.append("nvidia")
-
-        if (
-            settings.ENABLE_FALLBACK
-            and settings.gemini_configured
-        ):
-            providers.append("gemini")
-
-    # ==========================================
-    # NO PROVIDERS
-    # ==========================================
-
-    if not providers:
-
-        raise AIError(
-            "No AI provider is configured."
-        )
-
-    last_error: Exception | None = None
-
-    # ==========================================
-    # TRY PROVIDERS
-    # ==========================================
-
-    for index, provider in enumerate(providers):
-
-        fallback_used = index > 0
+    if settings.gemini_configured:
 
         try:
 
-            # ----------------------------------
-            # GEMINI
-            # ----------------------------------
+            logger.info(
+                "Using Gemini AI provider."
+            )
 
-            if provider == "gemini":
+            result = await gemini.analyze_text(
+                ocr_text
+            )
 
-                logger.info(
-                    "Using Gemini AI provider."
-                )
+            provider = result.pop(
+                "_provider",
+                "gemini",
+            )
 
-                result = await gemini.analyze_text(
-                    ocr_text
-                )
+            model = result.pop(
+                "_model",
+                settings.GEMINI_TEXT_MODEL,
+            )
 
-                return (
-                    result,
-                    "gemini",
-                    settings.GEMINI_TEXT_MODEL,
-                    fallback_used,
-                )
+            fallback_used = result.pop(
+                "_fallback_used",
+                False,
+            )
 
-            # ----------------------------------
-            # NVIDIA
-            # ----------------------------------
-
-            if provider == "nvidia":
-
-                logger.info(
-                    "Using NVIDIA NIM provider."
-                )
-
-                result = await nim.analyze_text(
-                    ocr_text
-                )
-
-                return (
-                    result,
-                    "nvidia",
-                    settings.NVIDIA_TEXT_MODEL,
-                    fallback_used,
-                )
-
-
+            return (
+                result,
+                provider,
+                model,
+                fallback_used,
+            )
 
         except Exception as exc:
 
-            last_error = exc
+            logger.exception(
+                "Gemini provider failed completely."
+            )
 
-            logger.exception("%s provider failed", provider)
-            # Try next provider automatically.
+    else:
 
-            if index + 1 < len(providers):
+        logger.error(
+            "Gemini API key is not configured."
+        )
 
-                logger.info(
-                    "Switching to fallback provider."
-                )
-
-    # ==========================================
-    # EVERYTHING FAILED
-    # ==========================================
+    # ---------------------------------------------------------
+    # NO OLD NVIDIA FALLBACK
+    # ---------------------------------------------------------
 
     raise AIError(
         "All configured AI providers failed."
-    ) from last_error
+    )
