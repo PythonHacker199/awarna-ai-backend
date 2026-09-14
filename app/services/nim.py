@@ -1,101 +1,247 @@
 from __future__ import annotations
 
+import base64
+import json
 import logging
-from typing import Any
+
+import httpx
 
 from ..config import settings
-from . import gemini
-from . import nim
+from .prompts import (
+    SYSTEM_PROMPT,
+    build_text_prompt,
+    build_image_prompt,
+)
 
-logger = logging.getLogger("awarna.ai")
+logger = logging.getLogger("awarna.nim")
 
 
-class AIError(Exception):
-    pass
+class NimError(Exception):
+    """NVIDIA NIM provider error."""
+
+
+def _extract_json(raw: str) -> dict:
+    """Extract JSON even if the model adds markdown fences or extra text."""
+
+    raw = raw.strip()
+
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+
+    start = raw.find("{")
+    end = raw.rfind("}")
+
+    if start == -1 or end == -1 or end <= start:
+        raise NimError(
+            "NVIDIA returned invalid JSON."
+        )
+
+    try:
+        return json.loads(
+            raw[start:end + 1]
+        )
+    except json.JSONDecodeError as exc:
+        raise NimError(
+            "NVIDIA returned unreadable JSON."
+        ) from exc
+
+
+async def _chat_completion(
+    messages: list[dict],
+    model: str,
+) -> dict:
+
+    if not settings.nvidia_configured:
+        raise NimError(
+            "NVIDIA NIM is not configured."
+        )
+
+    url = (
+        f"{settings.NVIDIA_BASE_URL.rstrip('/')}"
+        "/chat/completions"
+    )
+
+    headers = {
+        "Authorization": (
+            f"Bearer {settings.NVIDIA_NIM_API_KEY}"
+        ),
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": 0.1,
+        "top_p": 0.9,
+        "max_tokens": 1500,
+    }
+
+    try:
+
+        async with httpx.AsyncClient(
+            timeout=settings.REQUEST_TIMEOUT_SECONDS
+        ) as client:
+
+            response = await client.post(
+                url,
+                headers=headers,
+                json=payload,
+            )
+
+    except httpx.TimeoutException as exc:
+
+        raise NimError(
+            "NVIDIA AI service timed out."
+        ) from exc
+
+    except httpx.ConnectError as exc:
+
+        raise NimError(
+            "Could not connect to NVIDIA AI service."
+        ) from exc
+
+    except httpx.HTTPError as exc:
+
+        raise NimError(
+            "NVIDIA network error."
+        ) from exc
+
+    if response.status_code >= 500:
+
+        logger.error(
+            "NVIDIA upstream 5xx: %s",
+            response.status_code,
+        )
+
+        raise NimError(
+            "NVIDIA AI service is temporarily unavailable."
+        )
+
+    if response.status_code >= 400:
+
+        logger.error(
+            "NVIDIA upstream %s: %s",
+            response.status_code,
+            response.text[:500],
+        )
+
+        raise NimError(
+            "NVIDIA AI service rejected the request."
+        )
+
+    try:
+
+        data = response.json()
+
+    except ValueError as exc:
+
+        raise NimError(
+            "NVIDIA returned an unreadable response."
+        ) from exc
+
+    try:
+
+        content = (
+            data["choices"][0]
+            ["message"]["content"]
+        )
+
+    except (
+        KeyError,
+        IndexError,
+        TypeError,
+    ) as exc:
+
+        raise NimError(
+            "NVIDIA returned an empty response."
+        ) from exc
+
+    if not content or not content.strip():
+
+        raise NimError(
+            "NVIDIA returned an empty response."
+        )
+
+    return _extract_json(content)
 
 
 async def analyze_text(
     ocr_text: str,
-) -> tuple[dict[str, Any], str, str, bool]:
+) -> dict:
 
-    providers = []
+    text = ocr_text.strip()
 
-    if settings.PRIMARY_PROVIDER == "gemini":
-
-        if settings.gemini_configured:
-            providers.append("gemini")
-
-        if (
-            settings.ENABLE_FALLBACK
-            and settings.nvidia_configured
-        ):
-            providers.append("nvidia")
-
-    else:
-
-        if settings.nvidia_configured:
-            providers.append("nvidia")
-
-        if (
-            settings.ENABLE_FALLBACK
-            and settings.gemini_configured
-        ):
-            providers.append("gemini")
-
-    if not providers:
-        raise AIError(
-            "No AI provider is configured."
+    if not text:
+        raise NimError(
+            "No OCR text was provided."
         )
 
-    last_error = None
+    if len(text) > settings.MAX_OCR_CHARS:
 
-    for index, provider in enumerate(providers):
+        text = text[
+            :settings.MAX_OCR_CHARS
+        ]
 
-        fallback_used = index > 0
+    messages = [
+        {
+            "role": "system",
+            "content": SYSTEM_PROMPT,
+        },
+        {
+            "role": "user",
+            "content": build_text_prompt(text),
+        },
+    ]
 
-        try:
+    return await _chat_completion(
+        messages,
+        settings.NVIDIA_TEXT_MODEL,
+    )
 
-            if provider == "gemini":
 
-                result = await gemini.analyze_text(
-                    ocr_text
-                )
+async def analyze_image(
+    image_bytes: bytes,
+    content_type: str,
+) -> dict:
 
-                return (
-                    result,
-                    "gemini",
-                    settings.GEMINI_TEXT_MODEL,
-                    fallback_used,
-                )
+    if not image_bytes:
+        raise NimError(
+            "Image is empty."
+        )
 
-            if provider == "nvidia":
+    encoded = base64.b64encode(
+        image_bytes
+    ).decode("ascii")
 
-                result = await nim.analyze_text(
-                    ocr_text
-                )
+    data_url = (
+        f"data:{content_type};base64,{encoded}"
+    )
 
-                return (
-                    result,
-                    "nvidia",
-                    settings.NVIDIA_TEXT_MODEL,
-                    fallback_used,
-                )
+    messages = [
+        {
+            "role": "system",
+            "content": SYSTEM_PROMPT,
+        },
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": build_image_prompt(),
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": data_url,
+                    },
+                },
+            ],
+        },
+    ]
 
-        except Exception as exc:
-
-            last_error = exc
-
-            logger.warning(
-                "%s provider failed: %s",
-                provider,
-                type(exc).__name__,
-            )
-
-            if index + 1 < len(providers):
-                logger.warning(
-                    "Trying fallback provider..."
-                )
-
-    raise AIError(
-        "All configured AI providers failed."
-    ) from last_error
+    return await _chat_completion(
+        messages,
+        settings.NVIDIA_VISION_MODEL,
+    )
