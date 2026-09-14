@@ -120,18 +120,12 @@ async def analyze_text(
                 )
 
 
+
         except Exception as exc:
 
             last_error = exc
 
-            logger.exception(
-
-                "%s provider failed",
-
-                provider,
-
-            )
-
+            logger.exception("%s provider failed", provider)
             # Try next provider automatically.
 
             if index + 1 < len(providers):
