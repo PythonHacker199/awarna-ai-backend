@@ -104,9 +104,14 @@ class Settings:
     # CORS
     # ---------------------------------------------------------
 
+    # Comma-separated list, e.g. "https://awarna.app,https://www.awarna.app".
+    # Defaults to "*" (any origin) — safe here because no cookies or
+    # credentials are accepted; tighten it once the website has a domain.
     CORS_ALLOW_ORIGINS = [
-        "*",
-    ]
+        origin.strip()
+        for origin in os.getenv("CORS_ALLOW_ORIGINS", "*").split(",")
+        if origin.strip()
+    ] or ["*"]
 
     # ---------------------------------------------------------
     # STATUS
