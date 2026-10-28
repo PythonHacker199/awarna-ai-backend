@@ -1,0 +1,11 @@
+# Local tooling and Render-only files — not needed in the Vercel function.
+.venv/
+app/.venv/
+app/.idea/
+**/__pycache__/
+tests/
+Dockerfile
+render.yaml
+*.stackdump
+.env
+.env.*

@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 
 from ..config import settings
 from ..schemas import AnalyzeResponse, AnalyzeTextRequest
-from ..services.ai import AIError, analyze_text
+from ..services.ai import AIError, AITimeoutError, analyze_text
 from ..services.normalizer import normalize_extraction
 
 
@@ -30,6 +30,13 @@ async def analyze_text_route(
         ) = await analyze_text(
             body.ocr_text
         )
+
+    except AITimeoutError as exc:
+
+        raise HTTPException(
+            status_code=504,
+            detail=str(exc),
+        ) from exc
 
     except AIError as exc:
 

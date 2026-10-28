@@ -86,6 +86,18 @@ class Settings:
         )
     )
 
+    # Hard limit for ONE Gemini call. Without it a stalled call hangs the
+    # request forever (seen as 90s+ timeouts in the apps).
+    GEMINI_CALL_TIMEOUT_SECONDS: float = float(
+        os.getenv("GEMINI_CALL_TIMEOUT_SECONDS", "20")
+    )
+
+    # Total time for a whole analysis, across retries and fallback models.
+    # Kept under serverless limits; the apps fall back to manual entry.
+    ANALYZE_BUDGET_SECONDS: float = float(
+        os.getenv("ANALYZE_BUDGET_SECONDS", "45")
+    )
+
     MAX_IMAGE_MB: float = float(
         os.getenv(
             "MAX_IMAGE_MB",

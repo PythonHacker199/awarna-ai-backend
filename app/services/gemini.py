@@ -113,14 +113,24 @@ async def _generate(
     prompt: str,
 ) -> str:
 
-    response = await asyncio.to_thread(
-        client.models.generate_content,
-        model=model,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-        ),
-    )
+    try:
+        response = await asyncio.wait_for(
+            asyncio.to_thread(
+                client.models.generate_content,
+                model=model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                ),
+            ),
+            timeout=settings.GEMINI_CALL_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError as exc:
+        # "timed out" makes this retryable in _is_retryable_error.
+        raise GeminiError(
+            f"Gemini model '{model}' timed out after "
+            f"{settings.GEMINI_CALL_TIMEOUT_SECONDS:.0f}s."
+        ) from exc
 
     text = getattr(
         response,
@@ -222,8 +232,13 @@ async def analyze_text(
         : settings.MAX_OCR_CHARS
     ]
 
+    # The HTTP timeout (milliseconds) also stops the worker thread, so a
+    # stalled call cannot pile up behind the asyncio timeout.
     client = genai.Client(
-        api_key=settings.GEMINI_API_KEY
+        api_key=settings.GEMINI_API_KEY,
+        http_options=types.HttpOptions(
+            timeout=int(settings.GEMINI_CALL_TIMEOUT_SECONDS * 1000),
+        ),
     )
 
     prompt = (

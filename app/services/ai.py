@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from ..config import settings
@@ -8,6 +9,10 @@ logger = logging.getLogger("awarna.ai")
 
 
 class AIError(Exception):
+    pass
+
+
+class AITimeoutError(AIError):
     pass
 
 
@@ -32,8 +37,9 @@ async def analyze_text(
                 "Using Gemini AI provider."
             )
 
-            result = await gemini.analyze_text(
-                ocr_text
+            result = await asyncio.wait_for(
+                gemini.analyze_text(ocr_text),
+                timeout=settings.ANALYZE_BUDGET_SECONDS,
             )
 
             provider = result.pop(
@@ -57,6 +63,17 @@ async def analyze_text(
                 model,
                 fallback_used,
             )
+
+        except asyncio.TimeoutError as exc:
+
+            logger.error(
+                "Gemini analysis exceeded %.0fs budget.",
+                settings.ANALYZE_BUDGET_SECONDS,
+            )
+
+            raise AITimeoutError(
+                "AI analysis took too long. Please try again or enter the details manually."
+            ) from exc
 
         except Exception as exc:
 

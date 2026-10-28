@@ -46,3 +46,24 @@ def test_normalizer_rejects_absurd_amount():
 
     result = normalize_extraction({"amount": 999999999})
     assert result.amount is None
+
+
+def test_stalled_ai_returns_504_quickly(monkeypatch):
+    """A hung Gemini call must not hang the request (was 90s+ in production)."""
+    import asyncio
+    import time
+
+    from app.config import settings
+    from app.services import gemini
+
+    async def stalled(_text):
+        await asyncio.sleep(10)
+
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(settings, "ANALYZE_BUDGET_SECONDS", 0.3)
+    monkeypatch.setattr(gemini, "analyze_text", stalled)
+
+    start = time.monotonic()
+    r = client.post("/api/v1/analyze/text", json={"ocr_text": "Electricity bill due 15/11/2026"})
+    assert r.status_code == 504
+    assert time.monotonic() - start < 3
