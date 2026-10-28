@@ -11,13 +11,14 @@ class Settings:
     # Primary model
     GEMINI_TEXT_MODEL: str = os.getenv(
         "GEMINI_TEXT_MODEL",
-        "gemini-3.8-flash",
+        "gemini-3.6-flash",
     )
 
-    # Fallback models
+    # Fallback models. 3.8-flash goes last: in production it often stalled
+    # until Google's own 504 DEADLINE_EXCEEDED, adding ~20s before a fallback.
     GEMINI_FALLBACK_MODELS: list[str] = [
-        os.getenv("GEMINI_FALLBACK_MODEL_1", "gemini-3.6-flash"),
-        os.getenv("GEMINI_FALLBACK_MODEL_2", "gemini-3.5-flash-lite"),
+        os.getenv("GEMINI_FALLBACK_MODEL_1", "gemini-3.5-flash-lite"),
+        os.getenv("GEMINI_FALLBACK_MODEL_2", "gemini-3.8-flash"),
     ]
 
     # ---------------------------------------------------------
