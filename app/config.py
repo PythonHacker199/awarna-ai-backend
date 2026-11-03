@@ -146,6 +146,22 @@ class Settings:
     )
 
     # ---------------------------------------------------------
+    # WEBSITE PUSH REMINDERS (daily Vercel Cron)
+    # ---------------------------------------------------------
+
+    # Server-only secrets: set these in Vercel, never in code.
+    SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    VAPID_PRIVATE_KEY: str = os.getenv("VAPID_PRIVATE_KEY", "")
+    CRON_SECRET: str = os.getenv("CRON_SECRET", "")
+
+    # Public: the website subscribes with this same key.
+    VAPID_PUBLIC_KEY: str = os.getenv(
+        "VAPID_PUBLIC_KEY",
+        "BG9Oedjsxa_IhqW-iXZ9loRgqydlLfSQMQW2ClbiMhIPARo6HyhSLlKqh4sokiI9mGFM9viRbFReovGi9uC6giM",
+    )
+    VAPID_SUBJECT: str = os.getenv("VAPID_SUBJECT", "https://awarnaorganiser.web.app")
+
+    # ---------------------------------------------------------
     # CORS
     # ---------------------------------------------------------
 

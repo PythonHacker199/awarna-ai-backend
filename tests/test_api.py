@@ -104,3 +104,20 @@ def test_rate_limit_caps_one_user(monkeypatch):
         auth._rate_limit("busy-user")
     assert err.value.status_code == 429
     auth._rate_limit("another-user")  # other people are unaffected
+
+
+def test_cron_reminders_needs_the_secret(monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "CRON_SECRET", "right-secret")
+    assert client.get("/api/cron/reminders").status_code == 401
+    assert client.get("/api/cron/reminders", headers={"Authorization": "Bearer wrong"}).status_code == 401
+
+
+def test_reminder_message_has_no_document_names():
+    from app.routes.reminders import build_message
+
+    msg = build_message([{"papers": 1, "lead_days": 0}, {"papers": 2, "lead_days": 7}])
+    assert msg["title"] == "3 papers need attention"
+    assert msg["body"] == "1 is due today, 2 are due in 7 days. Open Awarna to see them."
+    assert msg["url"] == "/app/expiries"

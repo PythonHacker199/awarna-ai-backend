@@ -7,3 +7,8 @@ __pycache__/
 !.env.example
 
 .idea/
+.vercel
+.env*
+
+# Locally generated push keys (paste into Vercel, never commit)
+push-keys.local

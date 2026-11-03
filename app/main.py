@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .routes.analyze import router as analyze_router
+from .routes.reminders import router as reminders_router
 from .schemas import HealthResponse
 
 
@@ -31,6 +32,7 @@ app.add_middleware(
 )
 
 app.include_router(analyze_router)
+app.include_router(reminders_router)
 
 
 @app.get(
