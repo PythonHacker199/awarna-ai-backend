@@ -1,8 +1,12 @@
 from fastapi.testclient import TestClient
 
+from app.auth import require_user
 from app.main import app
 
 client = TestClient(app)
+
+# Most tests exercise the analyzer itself, so stand in for a signed-in user.
+app.dependency_overrides[require_user] = lambda: "test-user"
 
 
 def test_health():
@@ -67,3 +71,36 @@ def test_stalled_ai_returns_504_quickly(monkeypatch):
     r = client.post("/api/v1/analyze/text", json={"ocr_text": "Electricity bill due 15/11/2026"})
     assert r.status_code == 504
     assert time.monotonic() - start < 3
+
+
+def test_analyze_refuses_requests_without_sign_in():
+    """Anyone on the internet could call the AI service before; now they get 401."""
+    override = app.dependency_overrides.pop(require_user)
+    try:
+        r = client.post("/api/v1/analyze/text", json={"ocr_text": "Electricity bill due 15/11/2026"})
+        assert r.status_code == 401
+        r = client.post(
+            "/api/v1/analyze/text",
+            json={"ocr_text": "Electricity bill due 15/11/2026"},
+            headers={"Authorization": "Basic abc"},
+        )
+        assert r.status_code == 401
+    finally:
+        app.dependency_overrides[require_user] = override
+
+
+def test_rate_limit_caps_one_user(monkeypatch):
+    import pytest
+    from fastapi import HTTPException
+
+    from app import auth
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "RATE_LIMIT_REQUESTS", 3)
+    auth._recent.pop("busy-user", None)
+    for _ in range(3):
+        auth._rate_limit("busy-user")
+    with pytest.raises(HTTPException) as err:
+        auth._rate_limit("busy-user")
+    assert err.value.status_code == 429
+    auth._rate_limit("another-user")  # other people are unaffected

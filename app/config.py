@@ -114,6 +114,38 @@ class Settings:
     )
 
     # ---------------------------------------------------------
+    # WHO MAY USE THE AI SERVICE
+    # ---------------------------------------------------------
+
+    # Only signed-in Awarna users (checked with Supabase). Turn off only for
+    # local testing.
+    REQUIRE_AUTH: bool = os.getenv("REQUIRE_AUTH", "true").lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+    # Public values: the same URL and publishable key ship inside the apps.
+    SUPABASE_URL: str = os.getenv(
+        "SUPABASE_URL",
+        "https://rhwbcjywcjavquheoezs.supabase.co",
+    )
+    SUPABASE_ANON_KEY: str = os.getenv(
+        "SUPABASE_ANON_KEY",
+        "sb_publishable_6DseoiLtMi-QijRQ-J5rEw_n_fSIT6P",
+    )
+
+    # How long a checked sign-in is trusted before asking Supabase again.
+    AUTH_CACHE_SECONDS: float = float(os.getenv("AUTH_CACHE_SECONDS", "300"))
+
+    # Per-user cap: this many documents in this many seconds.
+    RATE_LIMIT_REQUESTS: int = int(os.getenv("RATE_LIMIT_REQUESTS", "30"))
+    RATE_LIMIT_WINDOW_SECONDS: float = float(
+        os.getenv("RATE_LIMIT_WINDOW_SECONDS", "600")
+    )
+
+    # ---------------------------------------------------------
     # CORS
     # ---------------------------------------------------------
 

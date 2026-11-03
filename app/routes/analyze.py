@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from ..auth import require_user
 from ..config import settings
 from ..schemas import AnalyzeResponse, AnalyzeTextRequest
 from ..services.ai import AIError, AITimeoutError, analyze_text
@@ -9,6 +10,7 @@ from ..services.normalizer import normalize_extraction
 router = APIRouter(
     prefix="/api/v1/analyze",
     tags=["analyze"],
+    dependencies=[Depends(require_user)],
 )
 
 
